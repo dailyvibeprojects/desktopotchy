@@ -1,76 +1,74 @@
-#Desktopotchy: Your Keystroke Companion 👾
-Desktopotchy is a minimalist, secure, and privacy-first desktop pet that lives in the corner of your screen. It evolves based on your productivity, "eating" your copy-pastes and growing alongside your projects.
+===============================================================================
+                       DESKTOPOTCHY USER DOCUMENTATION
+                           VERSION 1.0.0 (C) 2026
+===============================================================================
 
-#✨ Features
-Privacy First: Zero keylogging. The pet only reacts to specific global hotkeys (Ctrl+C, Ctrl+V, etc.) and never records what you type.
+1. DESCRIPTION
+-------------------------------------------------------------------------------
+Desktopotchy is a background utility for monitoring user productivity via 
+global hotkey interception. The entity evolves based on cumulative 
+keystroke data (Bites and Pastes).
 
-Evolution System: 6 distinct stages of growth, from "Newborn" to "Cosmic".
+2. SYSTEM REQUIREMENTS
+-------------------------------------------------------------------------------
+* Operating System: Windows, macOS, or Linux
+* Software: Python 3.x Environment
+* Dependencies: pynput library
 
-Daily Streaks: Tracks how many days in a row you've spent time together.
+INSTALLATION:
+C:\> pip install pynput
 
-Smart Sleep: Automatically falls asleep after 10 minutes of inactivity to stay out of your way.
+3. EXECUTION AND TERMINATION
+-------------------------------------------------------------------------------
+MANUAL START:
+Navigate to the source directory and execute the following command:
+C:\> python desktopotchy.py
 
-#🚀 Getting Started
-##1. Prerequisites
-Ensure you have Python 3.x installed. You will also need the pynput library for the hotkey reactions.
+MANUAL STOP:
+Use the termination hotkey [CTRL+Q] (Windows/Linux) or [CMD+Q] (macOS).
+Alternatively, break the process in the command line interface.
 
-Bash
-pip install pynput
+4. AUTOMATED STARTUP CONFIGURATION
+-------------------------------------------------------------------------------
+WINDOWS:
+1. Execute [WIN+R] and enter "shell:startup"
+2. Create New Shortcut
+3. Target: pythonw.exe "C:\PATH\TO\desktopotchy.py"
+   (pythonw.exe prevents the persistent console window)
 
-##2. Manual Start & Stop
-To Start: Open your terminal/command prompt, navigate to the folder containing desktopotchy.py, and run:
+MACOS:
+1. Open Automator.app -> New Application
+2. Add "Run Shell Script" action
+3. Input: /usr/local/bin/python3 /PATH/TO/desktopotchy.py &
+4. Save as Application and add to System Settings > Login Items
 
-Bash
-python desktopotchy.py
-To Stop: Use the built-in "Quick Quit" hotkey:
+5. INTERACTION LOGIC
+-------------------------------------------------------------------------------
+The application monitors the following interrupt signals:
 
-Windows/Linux: Ctrl + Q
+SIGNAL        ACTION               RESULT
+-------------------------------------------------------------------------------
+CTRL+C        Copy Command         Increment "Bites" (Feeding)
+CTRL+V        Paste Command        Increment "Play" (Interaction)
+CTRL+S        Save Command         Force Data Sync to Disk
+CTRL+Z        Undo Command         Visual Response Only
 
-macOS: Cmd + Q
+6. EVOLUTIONARY PARAMETERS
+-------------------------------------------------------------------------------
+LEVEL         POINT THRESHOLD      CLASSIFICATION
+-------------------------------------------------------------------------------
+LV 0          0                    Hatchling
+LV 1          1000                 Maru
+LV 2          2000                 Scholar
+LV 3          3000                 Cyber-Drake
+LV 4          4000                 Void-Walker
+LV 5          5000                 Star-Eater
 
-Alternatively, you can close the terminal window where the script is running.
+7. DATA ARCHITECTURE
+-------------------------------------------------------------------------------
+* desktopotchy.py: Main executable binary
+* pet_stats.json: Persistent data storage for levels and streaks
 
-#🛠 Configure "Run on Startup"
-For Windows 🪟
-Press Win + R on your keyboard, type shell:startup, and hit Enter. This opens the Startup folder.
-
-Right-click inside the folder and select New > Shortcut.
-
-In the location box, type the following (replacing the paths with your actual locations):
-pythonw.exe "C:\Path\To\Your\desktopotchy.py"
-Note: Using pythonw.exe instead of python.exe allows the pet to run in the background without a messy terminal window popping up.
-
-Click Next, name it "Desktopotchy", and click Finish.
-
-#For macOS 🍎
-Open the Automator app (found in Applications).
-
-Select New Document > Application.
-
-In the search bar, look for "Run Shell Script" and double-click it.
-
-In the box, paste:
-/usr/local/bin/python3 /Users/YOUR_NAME/Desktop/desktopotchy.py &
-(Make sure to use the full path to your python3 and the script).
-
-Save this as "Desktopotchy.app" in your Applications folder.
-
-Go to System Settings > General > Login Items, click the + button, and add your new "Desktopotchy.app".
-
-#🎮 How to Interact
-The pet evolves as you perform your usual workflow:
-
-Ctrl+C: Feeds the pet "Bites."
-
-Ctrl+V: Plays with the pet.
-
-Ctrl+S: The pet acknowledges your hard work by "Saving" its progress too.
-
-Ctrl+Z: A little "Oops" reaction.
-
-#📂 Files
-desktopotchy.py: The main logic and UI.
-
-pet_stats.json: Automatically created to store your level, bites, and streaks.
-
-Pro Tip: You can click and drag the pet anywhere on your screen if it's blocking a specific button in your design software!.
+===============================================================================
+                         END OF DOCUMENTATION FILE
+===============================================================================
