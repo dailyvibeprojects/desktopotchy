@@ -111,7 +111,7 @@ class KeystrokePet:
             },
             # LEVEL 2: 2,000 - 2,999 points (The Scholar)
             2000: { 
-                'normal': '28 d2 d2 2d 2023 2d d2 d2 29',
+                'normal': '3008 20 d2 20 2322 20 d2 20 3009',
                 'copy':   'd2 d2 28 20 2299 5f 2299 20 29 d2 d2',
                 'paste':  '2728 28 20 d2 1d55 d2 20 29 2728',
                 'save':   '28 20 d2 5f d2 20 29 20 1f4d6',
