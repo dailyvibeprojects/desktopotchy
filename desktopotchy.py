@@ -1,7 +1,7 @@
 import tkinter as tk
 import json
 import os
-import time
+from datetime import date, timedelta
 from pynput import keyboard
 
 IDLE_MS      = 10 * 60 * 1000  # 10 min until sleep
@@ -13,18 +13,22 @@ class KeystrokePet:
 
     # ── INIT ────────────────────────────────────────────────────────────────────
     def __init__(self):
-        self.save_file     = "pet_stats.json"
+        # Predictable save location: tied to the script's actual directory
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.save_file     = os.path.join(base_dir, "pet_stats.json")
+        
         self.reset_job     = None
         self.idle_job      = None
         self.is_sleeping   = False
         self.current_level = 0
         self.x = self.y    = None
+        self.listener      = None
 
         self.evolutions    = self._decode()
         self.stats         = self._load_stats()
         self._update_level()
 
-        # UI
+        # UI Setup
         self.root = tk.Tk()
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
@@ -43,31 +47,39 @@ class KeystrokePet:
         fp = int(14 * self.scale)   # pet font
         ft = int(9  * self.scale)   # stats font
 
+        # Added padx=10 to labels to prevent text from touching the window edge
         self.lbl_level = tk.Label(self.root,
             text=self._level_text(), font=('Helvetica', fs, 'bold'),
-            fg='#f1c40f', bg='#1a1a2e')
+            fg='#f1c40f', bg='#1a1a2e', padx=10)
         self.lbl_level.pack(pady=(5, 0))
 
         self.lbl_pet = tk.Label(self.root,
             text=self.faces['normal'], font=('Courier', fp, 'bold'),
-            fg='#4cd137', bg='#1a1a2e')
+            fg='#4cd137', bg='#1a1a2e', padx=10)
         self.lbl_pet.pack(pady=(2, 0))
 
         self.lbl_stats = tk.Label(self.root,
             text=self._stats_str(), font=('Helvetica', ft),
-            fg='#a9b0c0', bg='#1a1a2e')
+            fg='#a9b0c0', bg='#1a1a2e', padx=10)
         self.lbl_stats.pack(pady=(2, 5))
 
         self.banner = tk.Label(self.root,
             text='', font=('Helvetica', fs, 'bold'),
-            fg='#1a1a2e', bg='#9b59b6', padx=6, pady=2)
-        # banner not packed until evolution fires
+            fg='#1a1a2e', bg='#9b59b6', padx=10, pady=2)
 
         for w in (self.root, self.lbl_level, self.lbl_pet, self.lbl_stats):
             w.bind('<ButtonPress-1>',   self._drag_start)
             w.bind('<ButtonRelease-1>', self._drag_stop)
             w.bind('<B1-Motion>',       self._drag_move)
 
+        # Thread-safe virtual event bindings
+        self.root.bind('<<ReactCopy>>',  lambda e: self._react('copy', 'bites_eaten'))
+        self.root.bind('<<ReactPaste>>', lambda e: self._react('paste', 'pastes_played'))
+        self.root.bind('<<ReactSave>>',  lambda e: self._react('save'))
+        self.root.bind('<<ReactUndo>>',  lambda e: self._react('undo'))
+        self.root.bind('<<ReactQuit>>',  lambda e: self._quit())
+
+        # Initial positioning
         self.root.geometry(f'+{self.sw - int(220*self.scale)}'
                            f'+{self.sh - int(150*self.scale)}')
         self.root.after(150, self._fit)
@@ -76,56 +88,62 @@ class KeystrokePet:
         self._start_listener()
 
     # ── EVOLUTION DATA ──────────────────────────────────────────────────────────
-    # Faces hex-encoded — reading source won't spoil the surprise.
     def _decode(self):
+        # The progression is based on the 'Total' score (Bites + Pastes)
         raw = {
-            0: {
-                'normal': '28 20 20 2d 5f 2d 29 20 20',
-                'copy':   '28 20 2e 5f 2e 29 20 63 28',
-                'paste':  '28 20 2e 5f 2e 29 3063 2661',
-                'save':   '28 20 2d 5f 2d 29 7a 7a 5a 5a',
-                'undo':   '28 20 20 b0 5f b0 29 20 20',
-                'sleep':  '28 20 2d 5f 2d 29 7a 7a 5a 20',
+            # LEVEL 0: 0 - 999 points (The Hatchling - Classic Blob)
+            0: { 
+                'normal': '28 20 d2 20 2aeb 20 d2 20 29',
+                'copy':   '28 20 3e 5f 3c 20 29 20 1f331',
+                'paste':  '28 20 5e 5f 5e 20 29 20 266a',
+                'save':   '28 20 2d 5f 2d 20 29 20 1f4a4',
+                'undo':   '28 20 6f 5f 6f 20 29',
+                'sleep':  '28 20 2d 5f 2d 20 29 20 7a 5a',
             },
-            1000: {
-                'normal': '2f 1420 ff61 a788 ff61 141f 5c',
-                'copy':   '2f 1420 20 2e 5f 2e 20 141f 5c',
-                'paste':  '2f 1420 20 2661 1d55 2661 141f 5c',
-                'save':   '2f 1420 20 2d 1d17 2d 20 141f 5c',
-                'undo':   '2f 1420 20 2299 fe3f 2299 141f 5c',
-                'sleep':  '2f 1420 20 1d17 20 2e 20 141f 5c',
+            # LEVEL 1: 1,000 - 1,999 points (The Maru - Round & Expressive)
+            1000: { 
+                'normal': '28 20 2022 203f 2022 20 29',
+                'copy':   '28 20 2267 203f 2267 20 29 20 1f363',
+                'paste':  '28 20 ff3e 203f ff3e 20 29 20 1f3ae',
+                'save':   '28 20 25e1 203f 25e1 20 29 20 2728',
+                'undo':   '28 20 2299 5f 2299 20 29',
+                'sleep':  '28 20 75 5f 75 20 29 20 1f4a4',
             },
-            2000: {
-                'normal': '28 20 20 2022 1d25 2022 20 29 20 1f33f',
-                'copy':   '28 20 2a 1d25 2a 20 29 20 1f33f',
-                'paste':  '28 20 2661 1d25 2661 29 20 1f33f',
-                'save':   '28 20 2d 1d25 2d 20 29 20 1f33f',
-                'undo':   '28 20 2299 1d25 2299 29 20 1f33f',
-                'sleep':  '28 20 2d 1d25 2d 20 29 20 1f33f',
+            # LEVEL 2: 2,000 - 2,999 points (The Scholar)
+            2000: { 
+                'normal': '28 d2 d2 2d 2023 2d d2 d2 29',
+                'copy':   'd2 d2 28 20 2299 5f 2299 20 29 d2 d2',
+                'paste':  '2728 28 20 d2 1d55 d2 20 29 2728',
+                'save':   '28 20 d2 5f d2 20 29 20 1f4d6',
+                'undo':   '28 20 2299 203f 2299 20 29 20 1f4a1',
+                'sleep':  '28 20 2d 5f 2d 20 29 20 1f4a4',
             },
-            3000: {
-                'normal': '1f432 28 20 2d8 1d55 2d8 29',
-                'copy':   '1f432 28 20 2d8 25be 2d8 29',
-                'paste':  '1f432 28 20 2661 1d55 2661 29',
-                'save':   '1f432 28 20 2d8 1d17 2d8 29',
-                'undo':   '1f432 28 20 2299 1d55 2299 29',
-                'sleep':  '1f432 28 20 2d8 1d17 2d8 29 7a 7a 5a',
+            # LEVEL 3: 3,000 - 3,999 points (The Cyber-Drake)
+            3000: { 
+                'normal': '231c 28 20 d2 5f d2 20 29 231f',
+                'copy':   '231c 28 20 3e 5f 3c 20 29 231f 20 1f525',
+                'paste':  '231c 28 20 2a 5f 2a 20 29 231f 20 26a1',
+                'save':   '231c 28 20 2d 5f 2d 20 29 231f 20 1f4be',
+                'undo':   '231c 28 20 d2 203f d2 20 29 231f',
+                'sleep':  '231c 28 20 2d 5f 2d 20 29 231f 20 1f4a4',
             },
-            4000: {
-                'normal': '28 20 2d9 25bf 2d9 20 29 1f47b',
-                'copy':   '28 20 2022 15dc 2022 20 29 1f47b',
-                'paste':  '28 20 2661 203f 2661 20 29 1f47b',
-                'save':   '28 20 1d55 203f 1d55 20 29 1f47b',
-                'undo':   '28 20 2299 25bf 2299 29 1f47b',
-                'sleep':  '28 20 1d17 203f 1d17 20 29 1f47b',
+            # LEVEL 4: 4,000 - 4,999 points (The Void-Walker)
+            4000: { 
+                'normal': '201b 203d 28 20 d2 203f d2 20 29 203d 2018',
+                'copy':   '201b 203d 28 20 2299 15dc 2299 20 29 203d 2018',
+                'paste':  '201b 203d 28 20 2661 203f 2661 20 29 203d 2018',
+                'save':   '201b 203d 28 20 1d55 1d17 1d55 20 29 203d 2018',
+                'undo':   '201b 203d 28 20 203f 203f 203f 20 29 203d 2018',
+                'sleep':  '201b 203d 28 20 2d 5f 2d 20 29 203d 2018 7a 5a',
             },
-            5000: {
-                'normal': '3c8 28 20 25d5 203f 25d5 20 29 3c8',
-                'copy':   '3c8 28 20 25d5 15dc 25d5 20 29 3c8',
-                'paste':  '3c8 28 20 2661 203f 2661 20 29 3c8',
-                'save':   '3c8 28 20 1d55 203f 1d55 20 29 3c8',
-                'undo':   '3c8 28 20 2299 203f 2299 20 29 3c8',
-                'sleep':  '3c8 28 20 2d8 1d17 2d8 20 29 3c8',
+            # LEVEL 5: 5,000+ points (The Star-Eater - Final Form)
+        5000: { 
+                'normal': '2728 1f31f 28 20 d2 1d25 d2 20 29 1f31f 2728',
+                'copy':   '1f30c 28 20 2299 1d25 2299 20 29 1f30c',
+                'paste':  '2728 28 20 263c 1d25 263c 20 29 2728',
+                'save':   '1f31f 28 20 1d55 1d25 1d55 20 29 1f31f',
+                'undo':   '2728 28 20 2299 1d25 2299 20 29 2728',
+                'sleep':  '1f311 28 20 2d 1d25 2d 20 29 1f311',
             },
         }
         return {
@@ -150,12 +168,13 @@ class KeystrokePet:
             json.dump(self.stats, f)
 
     def _update_streak(self):
-        today     = time.strftime('%Y-%m-%d')
-        last      = self.stats.get('last_active_date', '')
+        today = date.today().isoformat()
+        last  = self.stats.get('last_active_date', '')
         if last == today:
             return
-        yesterday = time.strftime('%Y-%m-%d',
-                                  time.localtime(time.time() - 86400))
+        # Robust DST-safe yesterday calculation
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        
         self.stats['streak_days'] = (
             self.stats.get('streak_days', 0) + 1
             if last == yesterday else 1)
@@ -186,9 +205,10 @@ class KeystrokePet:
 
     # ── WINDOW FIT ──────────────────────────────────────────────────────────────
     def _fit(self):
-        self.root.geometry('')            # release any fixed WxH
-        self.root.update_idletasks()      # let tkinter measure content
-        w = self.root.winfo_reqwidth()
+        self.root.geometry('')            
+        self.root.update_idletasks()      
+        # Added a 12px buffer to the width to prevent ASCII cropping
+        w = self.root.winfo_reqwidth() + int(12 * self.scale)
         h = self.root.winfo_reqheight()
         x = self.sw - w - int(20 * self.scale)
         y = self.sh - h - int(60 * self.scale)
@@ -238,6 +258,7 @@ class KeystrokePet:
 
     # ── REACTIONS ───────────────────────────────────────────────────────────────
     def _react(self, face_key, stat_key=None):
+        # Guaranteed main-thread execution via virtual events
         self._wake()
         self._schedule_idle()
 
@@ -248,22 +269,16 @@ class KeystrokePet:
             self._update_streak()
             self._save_stats()
             self._update_level()
-            self.root.after(0, lambda: self.lbl_stats.config(
-                text=self._stats_str()))
+            self.lbl_stats.config(text=self._stats_str())
 
         if self.current_level > old_level:
-            def _evolve():
-                self.lbl_level.config(
-                    text=f'EVOLVED! Lv{self.current_level}', fg='#9b59b6')
-                self.lbl_pet.config(text=self.faces['paste'], fg='#f1c40f')
-                self._fit()
-                self._show_banner()
-            self.root.after(0, _evolve)
+            self.lbl_level.config(text=f'EVOLVED! Lv{self.current_level}', fg='#9b59b6')
+            self.lbl_pet.config(text=self.faces['paste'], fg='#f1c40f')
+            self._fit()
+            self._show_banner()
         else:
-            def _show(fk=face_key):
-                self.lbl_pet.config(text=self.faces[fk], fg='#e94560')
-                self._fit()
-            self.root.after(0, _show)
+            self.lbl_pet.config(text=self.faces[face_key], fg='#e94560')
+            self._fit()
 
         if self.reset_job:
             self.root.after_cancel(self.reset_job)
@@ -278,22 +293,26 @@ class KeystrokePet:
     # ── QUIT ────────────────────────────────────────────────────────────────────
     def _quit(self):
         self._save_stats()
+        if self.listener:
+            self.listener.stop()
         self.root.destroy()
 
     # ── LISTENER ────────────────────────────────────────────────────────────────
     def _start_listener(self):
-        keyboard.GlobalHotKeys({
-            '<ctrl>+c': lambda: self._react('copy',  'bites_eaten'),
-            '<cmd>+c':  lambda: self._react('copy',  'bites_eaten'),
-            '<ctrl>+v': lambda: self._react('paste', 'pastes_played'),
-            '<cmd>+v':  lambda: self._react('paste', 'pastes_played'),
-            '<ctrl>+s': lambda: self._react('save'),
-            '<cmd>+s':  lambda: self._react('save'),
-            '<ctrl>+z': lambda: self._react('undo'),
-            '<cmd>+z':  lambda: self._react('undo'),
-            '<ctrl>+q': lambda: self.root.after(0, self._quit),
-            '<cmd>+q':  lambda: self.root.after(0, self._quit),
-        }).start()
+        # Pushes virtual events to avoid background-thread UI crashes
+        self.listener = keyboard.GlobalHotKeys({
+            '<ctrl>+c': lambda: self.root.event_generate('<<ReactCopy>>',  when='tail'),
+            '<cmd>+c':  lambda: self.root.event_generate('<<ReactCopy>>',  when='tail'),
+            '<ctrl>+v': lambda: self.root.event_generate('<<ReactPaste>>', when='tail'),
+            '<cmd>+v':  lambda: self.root.event_generate('<<ReactPaste>>', when='tail'),
+            '<ctrl>+s': lambda: self.root.event_generate('<<ReactSave>>',  when='tail'),
+            '<cmd>+s':  lambda: self.root.event_generate('<<ReactSave>>',  when='tail'),
+            '<ctrl>+z': lambda: self.root.event_generate('<<ReactUndo>>',  when='tail'),
+            '<cmd>+z':  lambda: self.root.event_generate('<<ReactUndo>>',  when='tail'),
+            '<ctrl>+[': lambda: self.root.event_generate('<<ReactQuit>>',  when='tail'),
+            '<cmd>+[':  lambda: self.root.event_generate('<<ReactQuit>>',  when='tail'),
+        })
+        self.listener.start()
 
     # ── RUN ─────────────────────────────────────────────────────────────────────
     def run(self):
